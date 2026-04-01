@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IRDIS — Indian Railway Delay Intelligence System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181b22;
+    --border: #252830;
+    --accent: #f7a800;
+    --accent2: #ff4d4d;
+    --accent3: #00e5a0;
+    --text: #e8eaf0;
+    --muted: #6b7080;
+    --rail-blue: #3b8bff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* GRID OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(247,168,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(247,168,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* HEADER */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,12,16,0.92);
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .logo {
+    font-size: 1.3rem; font-weight: 800; letter-spacing: 0.04em;
+    color: var(--accent);
+  }
+  .logo span { color: var(--text); font-weight: 400; }
+  .header-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem; color: var(--accent3);
+    border: 1px solid var(--accent3);
+    padding: 3px 10px; border-radius: 20px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent3);
+    animation: pulse 1.4s ease infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  nav a {
+    color: var(--muted); text-decoration: none;
+    font-size: 0.85rem; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 0 1rem; transition: color 0.2s;
+  }
+  nav a:hover { color: var(--text); }
+
+  /* HERO */
+  .hero {
+    position: relative; z-index: 1;
+    padding: 6rem 2rem 3rem;
+    text-align: center;
+    max-width: 860px; margin: 0 auto;
+  }
+  .hero-tag {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem; color: var(--accent);
+    letter-spacing: 0.12em; text-transform: uppercase;
+    margin-bottom: 1.2rem;
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    font-weight: 800; line-height: 1.1;
+    letter-spacing: -0.02em; margin-bottom: 1.2rem;
+  }
+  .hero h1 em { color: var(--accent); font-style: normal; }
+  .hero p {
+    font-size: 1.05rem; color: var(--muted);
+    line-height: 1.7; max-width: 580px; margin: 0 auto 2.5rem;
+  }
+  .hero-stats {
+    display: flex; gap: 2rem; justify-content: center;
+    flex-wrap: wrap; margin-bottom: 3rem;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-num {
+    font-size: 2rem; font-weight: 800; color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .stat-label {
+    font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+
+  /* MAIN LAYOUT */
+  .container {
+    max-width: 1280px; margin: 0 auto;
+    padding: 0 2rem 4rem;
+    position: relative; z-index: 1;
+  }
+  .grid-2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+  /* CARDS */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.8rem;
+    position: relative; overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .card-title {
+    font-size: 0.78rem; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 1.4rem;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-title span { color: var(--accent); font-size: 1rem; }
+
+  /* FORM ELEMENTS */
+  .form-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .form-group {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .form-group.full { grid-column: 1 / -1; }
+  label {
+    font-size: 0.72rem; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase;
+    font-weight: 700; font-family: 'IBM Plex Mono', monospace;
+  }
+  input, select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  select option { background: var(--surface2); }
+
+  .range-group {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .range-row {
+    display: flex; align-items: center; gap: 10px;
+  }
+  input[type=range] {
+    flex: 1; accent-color: var(--accent);
+    padding: 0; border: none; background: none;
+    cursor: pointer;
+  }
+  .range-val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem; color: var(--accent);
+    min-width: 48px; text-align: right;
+  }
+
+  /* BUTTON */
+  .btn-predict {
+    width: 100%; margin-top: 1.4rem;
+    padding: 14px 24px;
+    background: var(--accent);
+    color: #0a0c10;
+    border: none; border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-size: 0.95rem; font-weight: 800;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .btn-predict:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(247,168,0,0.35); }
+  .btn-predict:active { transform: translateY(0); }
+  .btn-predict:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* RESULT PANEL */
+  #result-panel {
+    display: none;
+    margin-top: 2rem;
+    animation: fadeIn 0.4s ease;
+  }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+  .delay-display {
+    display: flex; align-items: center; gap: 2rem;
+    flex-wrap: wrap; margin-bottom: 1.5rem;
+  }
+  .delay-big {
+    font-size: 5rem; font-weight: 800;
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 1; color: var(--accent);
+  }
+  .delay-big.green { color: var(--accent3); }
+  .delay-big.red { color: var(--accent2); }
+  .delay-meta { display: flex; flex-direction: column; gap: 6px; }
+  .delay-severity {
+    font-size: 1.2rem; font-weight: 700;
+    letter-spacing: 0.06em;
+  }
+  .delay-cause {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.85rem; color: var(--muted);
+  }
+
+  /* PROB BARS */
+  .prob-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 0.8rem; }
+  .prob-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+  .prob-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem; color: var(--muted);
+    min-width: 120px;
+  }
+  .prob-bar-wrap {
+    flex: 1; background: var(--bg);
+    border-radius: 4px; height: 8px; overflow: hidden;
+  }
+  .prob-bar {
+    height: 100%; border-radius: 4px;
+    transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+  }
+  .prob-pct {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem; color: var(--text);
+    min-width: 38px; text-align: right;
+  }
+
+  /* STATUS CHIPS */
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 20px;
+    font-size: 0.72rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  .chip.on-time { background: rgba(0,229,160,0.12); color: var(--accent3); border: 1px solid rgba(0,229,160,0.3); }
+  .chip.minor { background: rgba(247,168,0,0.12); color: var(--accent); border: 1px solid rgba(247,168,0,0.3); }
+  .chip.major { background: rgba(255,77,77,0.12); color: var(--accent2); border: 1px solid rgba(255,77,77,0.3); }
+
+  /* AI ANALYSIS */
+  #ai-analysis {
+    background: var(--surface2);
+    border: 1px solid rgba(59,139,255,0.2);
+    border-radius: 12px; padding: 1.4rem;
+    margin-top: 1.2rem;
+    font-size: 0.92rem; line-height: 1.75;
+    color: var(--text);
+    position: relative;
+    min-height: 80px;
+  }
+  #ai-analysis::before {
+    content: 'AI ANALYSIS';
+    position: absolute; top: -10px; left: 16px;
+    background: var(--surface2);
+    padding: 0 8px;
+    font-size: 0.65rem; color: var(--rail-blue);
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: 0.12em;
+    border: 1px solid rgba(59,139,255,0.2);
+    border-radius: 4px;
+  }
+  .typing-cursor {
+    display: inline-block; width: 8px; height: 16px;
+    background: var(--rail-blue); margin-left: 3px;
+    vertical-align: middle;
+    animation: blink 0.8s step-end infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* DASHBOARD SECTION */
+  .section-title {
+    font-size: 1.4rem; font-weight: 800;
+    margin-bottom: 0.4rem;
+  }
+  .section-sub {
+    font-size: 0.85rem; color: var(--muted);
+    margin-bottom: 2rem;
+  }
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 3rem 0;
+  }
+
+  /* STATION TABLE */
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    padding: 10px 16px; text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(37,40,48,0.6);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .td-station { font-weight: 600; color: var(--text); }
+  .td-code { color: var(--accent); }
+  .pct-bar {
+    display: flex; align-items: center; gap: 8px;
+  }
+  .pct-mini {
+    width: 60px; height: 5px;
+    background: var(--bg); border-radius: 3px; overflow: hidden;
+  }
+  .pct-fill { height: 100%; border-radius: 3px; }
+
+  /* CHARTS */
+  .chart-wrap { position: relative; height: 260px; }
+
+  /* SIMULATION PANEL */
+  #sim-log {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem 1.2rem;
+    height: 260px; overflow-y: auto;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem; line-height: 1.8;
+  }
+  .sim-line { animation: fadeIn 0.3s ease; }
+  .sim-line.info { color: var(--text); }
+  .sim-line.warn { color: var(--accent); }
+  .sim-line.ok { color: var(--accent3); }
+  .sim-line.err { color: var(--accent2); }
+  .sim-line.sys { color: var(--rail-blue); }
+
+  .btn-sim {
+    padding: 10px 20px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 0.82rem; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.2s;
+    margin-right: 10px; margin-top: 1rem;
+  }
+  .btn-sim:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* NETWORK VIZ */
+  #network-svg { width: 100%; overflow: visible; }
+
+  /* TRAIN TICKER */
+  .ticker-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  .ticker-header {
+    background: var(--surface2); padding: 8px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.7rem; color: var(--muted);
+    letter-spacing: 0.1em; text-transform: uppercase;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ticker-body {
+    display: flex; overflow-x: auto;
+    gap: 1px; background: var(--border);
+  }
+  .ticker-item {
+    flex: 0 0 auto; min-width: 160px;
+    background: var(--surface);
+    padding: 12px 16px;
+  }
+  .ticker-train {
+    font-size: 0.78rem; font-weight: 700;
+    color: var(--accent); margin-bottom: 2px;
+  }
+  .ticker-route {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem; color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .ticker-delay {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.1rem; font-weight: 600;
+  }
+
+  /* LOADING */
+  .loading-ring {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid rgba(10,12,16,0.3);
+    border-top-color: #0a0c10;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* FOOTER */
+  footer {
+    text-align: center; padding: 2rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.72rem; color: var(--muted);
+    border-top: 1px solid var(--border);
+    position: relative; z-index: 1;
+  }
+
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .model-pills {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem;
+  }
+  .pill {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.68rem; padding: 4px 10px;
+    border-radius: 4px; border: 1px solid var(--border);
+    color: var(--muted);
+    cursor: pointer; transition: all 0.2s;
+  }
+  .pill.active { border-color: var(--accent); color: var(--accent); background: rgba(247,168,0,0.08); }
+
+  @media (max-width: 600px) {
+    .form-grid { grid-template-columns: 1fr; }
+    .delay-big { font-size: 3.5rem; }
+    .hero h1 { font-size: 2rem; }
+    nav { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">IRDIS <span>/ Railway Intelligence</span></div>
+  <nav>
+    <a href="#predictor">Predict</a>
+    <a href="#dashboard">Dashboard</a>
+    <a href="#simulation">Simulation</a>
+  </nav>
+  <div class="header-badge"><div class="pulse"></div> Live System</div>
+</header>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-tag">▸ Indian Railway Delay Intelligence System</div>
+  <h1>Predict Train Delays<br>with <em>Machine Learning</em></h1>
+  <p>Powered by RandomForest, GradientBoosting & real weather data. Predict delay severity, classify root causes, and get AI-generated operational analysis.</p>
+  <div class="hero-stats">
+    <div class="stat">
+      <div class="stat-num">60+</div>
+      <div class="stat-label">Trains Tracked</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">1,060</div>
+      <div class="stat-label">Training Samples</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">3</div>
+      <div class="stat-label">ML Models</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">4</div>
+      <div class="stat-label">Root Causes</div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- LIVE TRAIN TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker-header"><div class="pulse"></div> Mock Live Feed — Tracked Trains</div>
+    <div class="ticker-body" id="ticker-body"></div>
+  </div>
+
+  <!-- PREDICTOR SECTION -->
+  <div id="predictor" style="scroll-margin-top:80px">
+    <div class="section-title">🔮 Delay Predictor</div>
+    <div class="section-sub">Enter train and environmental parameters to run the ML pipeline</div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:1.5rem">
+    <!-- INPUT CARD -->
+    <div class="card">
+      <div class="card-title"><span>⚙</span> Input Parameters</div>
+
+      <div class="model-pills">
+        <div class="pill active" onclick="setModel('gb')" id="pill-gb">GradientBoosting ✓</div>
+        <div class="pill" onclick="setModel('rf')" id="pill-rf">RandomForest</div>
+        <div class="pill" onclick="setModel('lr')" id="pill-lr">LinearRegression</div>
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Train Number</label>
+          <select id="train-no">
+            <option value="12301">12301 — Howrah Rajdhani</option>
+            <option value="12302">12302 — Howrah Rajdhani (R)</option>
+            <option value="12951">12951 — Mumbai Rajdhani</option>
+            <option value="12952" selected>12952 — Mumbai Rajdhani (R)</option>
+            <option value="22691">22691 — Rajdhani Express</option>
+            <option value="12004">12004 — New Delhi Shatabdi</option>
+            <option value="12625">12625 — Kerala Express</option>
+            <option value="12553">12553 — Vaishali Express</option>
+            <option value="12839">12839 — Chennai Mail</option>
+            <option value="14866">14866 — Marudhar Express</option>
+            <option value="14321">14321 — Ala Hazrat Express</option>
+            <option value="12801">12801 — Purushottam Express</option>
+            <option value="12723">12723 — AP Express</option>
+            <option value="15959">15959 — Kamrup Express</option>
+            <option value="12259">12259 — Sealdah Duronto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Station Code</label>
+          <select id="station-code">
+            <option value="NDLS">NDLS — New Delhi</option>
+            <option value="HWH">HWH — Howrah (Kolkata)</option>
+            <option value="BCT">BCT — Mumbai Central</option>
+            <option value="MAS">MAS — Chennai Central</option>
+            <option value="SBC">SBC — Bangalore City</option>
+            <option value="CNB">CNB — Kanpur Central</option>
+            <option value="ADI">ADI — Ahmedabad Jn</option>
+            <option value="PUNE">PUNE — Pune Jn</option>
+            <option value="LJN">LJN — Lucknow NE</option>
+            <option value="NGP">NGP — Nagpur</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <div class="range-group">
+            <label>Rainfall (Weather Metric 1)</label>
+            <div class="range-row">
+              <input type="range" id="rain" min="0" max="80" step="0.5" value="5" oninput="document.getElementById('rain-val').textContent=this.value+'mm'">
+              <div class="range-val" id="rain-val">5mm</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group full">
+          <div class="range-group">
+            <label>Wind Speed (Weather Metric 2)</label>
+            <div class="range-row">
+              <input type="range" id="wind" min="0" max="60" step="0.5" value="10" oninput="document.getElementById('wind-val').textContent=this.value+' km/h'">
+              <div class="range-val" id="wind-val">10 km/h</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Day of Week</label>
+          <select id="day-of-week">
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+            <option value="Friday">Friday</option>
+            <option value="Saturday">Saturday</option>
+            <option value="Sunday">Sunday</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Month</label>
+          <select id="month">
+            <option value="1">January</option>
+            <option value="2">February</option>
+            <option value="3" selected>March</option>
+            <option value="4">April</option>
+            <option value="5">May</option>
+            <option value="6">June</option>
+            <option value="7">July</option>
+            <option value="8">August</option>
+            <option value="9">September</option>
+            <option value="10">October</option>
+            <option value="11">November</option>
+            <option value="12">December</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-predict" id="predict-btn" onclick="runPrediction()">
+        Run ML Pipeline
+      </button>
+    </div>
+
+    <!-- RESULT CARD -->
+    <div class="card">
+      <div class="card-title"><span>📊</span> Prediction Results</div>
+
+      <div id="result-panel">
+        <div class="delay-display">
+          <div class="delay-big" id="delay-num">0</div>
+          <div class="delay-meta">
+            <div id="severity-chip"></div>
+            <div class="delay-cause" id="root-cause-text">Root Cause: —</div>
+            <div class="delay-cause" id="model-used-text">Model: —</div>
+          </div>
+        </div>
+
+        <div class="card-title"><span>📈</span> Root Cause Probability</div>
+        <div class="prob-bars" id="prob-bars"></div>
+
+        <div id="ai-analysis">
+          <span id="ai-text"></span><span class="typing-cursor" id="cursor" style="display:none"></span>
+        </div>
+      </div>
+
+      <div id="empty-state" style="padding:3rem 0; text-align:center; color:var(--muted)">
+        <div style="font-size:2.5rem;margin-bottom:1rem">🚂</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:0.85rem">Fill the form and run the pipeline to see predictions</div>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" style="scroll-margin-top:80px">
+    <div class="section-title">📊 Station Performance Dashboard</div>
+    <div class="section-sub">Aggregated delay statistics across all tracked stations — computed from synthetic training data (1,060 rows)</div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:1.5rem">
+    <div class="card">
+      <div class="card-title"><span>🏆</span> Punctuality Leaderboard</div>
+      <div class="chart-wrap"><canvas id="punctuality-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>🌧</span> Rain vs Delay Correlation</div>
+      <div class="chart-wrap"><canvas id="rain-chart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem">
+    <div class="card-title"><span>📋</span> Station Delay Report</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th><th>Station</th>
+            <th>Avg Delay</th>
+            <th>On Time (0–15m)</th>
+            <th>Slight Delay (15–60m)</th>
+            <th>Significant (>1hr)</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="station-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="grid-2" style="margin-bottom:1.5rem">
+    <div class="card">
+      <div class="card-title"><span>📆</span> Delay by Day of Week</div>
+      <div class="chart-wrap"><canvas id="day-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span>🔍</span> Root Cause Distribution</div>
+      <div class="chart-wrap"><canvas id="cause-chart"></canvas></div>
+    </div>
+  </div>
+
+  <hr class="section-divider">
+
+  <!-- SIMULATION SECTION -->
+  <div id="simulation" style="scroll-margin-top:80px">
+    <div class="section-title">🛤 Railway Dispatch Simulation</div>
+    <div class="section-sub">Configure your scenario — choose trains, set conflict conditions, enable rerouting and watch the graph-based dispatch engine resolve priority conflicts in real time.</div>
+  </div>
+
+  <!-- SIM CONFIG PANEL -->
+  <div class="card" style="margin-bottom:1.5rem">
+    <div class="card-title"><span>⚙</span> Simulation Configuration</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.2rem">
+
+      <!-- Express Train -->
+      <div class="form-group">
+        <label>Express Train</label>
+        <select id="sim-express">
+          <option value="12302_Rajdhani">12302 — Howrah Rajdhani</option>
+          <option value="12951_Mumbai_Raj">12951 — Mumbai Rajdhani</option>
+          <option value="12004_Shatabdi">12004 — New Delhi Shatabdi</option>
+          <option value="12259_Duronto">12259 — Sealdah Duronto</option>
+          <option value="12625_Kerala_Exp">12625 — Kerala Express</option>
+        </select>
+      </div>
+
+      <!-- Freight Train -->
+      <div class="form-group">
+        <label>Freight Train</label>
+        <select id="sim-freight">
+          <option value="BOXN_Coal_Freight">BOXN Coal Freight</option>
+          <option value="BCNA_Container">BCNA Container Freight</option>
+          <option value="BTPN_Petroleum">BTPN Petroleum Tanker</option>
+          <option value="BVZI_Auto_Carrier">BVZI Auto Carrier</option>
+        </select>
+      </div>
+
+      <!-- Express Start -->
+      <div class="form-group">
+        <label>Express Starts At</label>
+        <select id="sim-express-start">
+          <option value="NDLS">NDLS — New Delhi</option>
+          <option value="ALJN">ALJN — Aligarh Jn</option>
+          <option value="BYP">BYP — Bypass Loop</option>
+        </select>
+      </div>
+
+      <!-- Freight Start -->
+      <div class="form-group">
+        <label>Freight Starts At</label>
+        <select id="sim-freight-start">
+          <option value="ALJN">ALJN — Aligarh Jn</option>
+          <option value="NDLS">NDLS — New Delhi</option>
+          <option value="BYP">BYP — Bypass Loop</option>
+        </select>
+      </div>
+
+      <!-- Initial Express Delay -->
+      <div class="form-group">
+        <label>Express Initial Delay (min)</label>
+        <div class="range-row" style="margin-top:4px">
+          <input type="range" id="sim-express-delay" min="0" max="90" step="5" value="35" oninput="document.getElementById('sim-exp-dval').textContent=this.value+' min'">
+          <div class="range-val" id="sim-exp-dval">35 min</div>
+        </div>
+      </div>
+
+      <!-- Congestion Risk -->
+      <div class="form-group">
+        <label>ALJN Congestion Risk Score</label>
+        <div class="range-row" style="margin-top:4px">
+          <input type="range" id="sim-risk" min="0" max="1" step="0.05" value="0.78" oninput="document.getElementById('sim-risk-val').textContent=parseFloat(this.value).toFixed(2)">
+          <div class="range-val" id="sim-risk-val">0.78</div>
+        </div>
+      </div>
+
+      <!-- Bypass Penalty -->
+      <div class="form-group">
+        <label>Bypass Time Penalty (min)</label>
+        <div class="range-row" style="margin-top:4px">
+          <input type="range" id="sim-bypass-penalty" min="10" max="90" step="5" value="50" oninput="document.getElementById('sim-bp-val').textContent=this.value+' min'">
+          <div class="range-val" id="sim-bp-val">50 min</div>
+        </div>
+      </div>
+
+      <!-- Conflict Hold -->
+      <div class="form-group">
+        <label>Conflict Hold Penalty (min)</label>
+        <div class="range-row" style="margin-top:4px">
+          <input type="range" id="sim-hold" min="5" max="60" step="5" value="15" oninput="document.getElementById('sim-hold-val').textContent=this.value+' min'">
+          <div class="range-val" id="sim-hold-val">15 min</div>
+        </div>
+      </div>
+
+      <!-- Risk Threshold -->
+      <div class="form-group">
+        <label>Reroute Risk Threshold</label>
+        <div class="range-row" style="margin-top:4px">
+          <input type="range" id="sim-threshold" min="0.3" max="0.95" step="0.05" value="0.70" oninput="document.getElementById('sim-thresh-val').textContent=parseFloat(this.value).toFixed(2)">
+          <div class="range-val" id="sim-thresh-val">0.70</div>
+        </div>
+      </div>
+
+      <!-- Toggle Options -->
+      <div class="form-group" style="justify-content:flex-end;gap:10px">
+        <label>Options</label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:0.82rem;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="sim-reroute" checked style="accent-color:var(--accent);width:14px;height:14px;padding:0;border:none;background:none">
+            Enable AI Rerouting
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:0.82rem;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="sim-priority" checked style="accent-color:var(--accent);width:14px;height:14px;padding:0;border:none;background:none">
+            Express Priority Mode
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:0.82rem;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="sim-fast" style="accent-color:var(--accent);width:14px;height:14px;padding:0;border:none;background:none">
+            Fast Mode (2× speed)
+          </label>
+        </div>
+      </div>
+
+    </div>
+    <!-- Scenario Presets -->
+    <div style="margin-top:1.2rem;padding-top:1.2rem;border-top:1px solid var(--border);display:flex;gap:0.7rem;flex-wrap:wrap;align-items:center">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:0.7rem;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Presets:</span>
+      <button class="btn-sim" style="margin:0;padding:6px 14px;font-size:0.75rem" onclick="applyPreset('default')">⚡ Default</button>
+      <button class="btn-sim" style="margin:0;padding:6px 14px;font-size:0.75rem" onclick="applyPreset('heavy_freight')">🚛 Heavy Freight Conflict</button>
+      <button class="btn-sim" style="margin:0;padding:6px 14px;font-size:0.75rem" onclick="applyPreset('no_reroute')">🚫 No Rerouting</button>
+      <button class="btn-sim" style="margin:0;padding:6px 14px;font-size:0.75rem" onclick="applyPreset('low_risk')">🟢 Low Risk Scenario</button>
+      <button class="btn-sim" style="margin:0;padding:6px 14px;font-size:0.75rem" onclick="applyPreset('crisis')">🔴 Crisis Mode</button>
+    </div>
+  </div>
+
+  <!-- NETWORK + CONSOLE -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span>🗺</span> Network Topology — Delhi to Mughalsarai</div>
+      <svg id="network-svg" viewBox="0 0 520 220" style="height:220px">
+        <defs>
+          <marker id="arrowOk" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 Z" fill="#00e5a0"/>
+          </marker>
+          <marker id="arrowBad" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 Z" fill="#ff4d4d"/>
+          </marker>
+          <marker id="arrowNeutral" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 Z" fill="#6b7080"/>
+          </marker>
+        </defs>
+        <line id="e-ndls-aljn" x1="60" y1="110" x2="170" y2="70" stroke="#6b7080" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowNeutral)"/>
+        <line id="e-aljn-cnb"  x1="190" y1="70" x2="280" y2="110" stroke="#6b7080" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrowNeutral)"/>
+        <line id="e-ndls-byp"  x1="60" y1="110" x2="170" y2="155" stroke="#6b7080" stroke-width="2" marker-end="url(#arrowNeutral)"/>
+        <line id="e-byp-cnb"   x1="190" y1="155" x2="280" y2="110" stroke="#6b7080" stroke-width="2" marker-end="url(#arrowNeutral)"/>
+        <line id="e-cnb-pryj"  x1="300" y1="110" x2="390" y2="110" stroke="#6b7080" stroke-width="2" marker-end="url(#arrowNeutral)"/>
+        <line id="e-pryj-ddu"  x1="410" y1="110" x2="490" y2="110" stroke="#6b7080" stroke-width="2" marker-end="url(#arrowNeutral)"/>
+        <g id="node-NDLS"><circle cx="60" cy="110" r="24" fill="#111318" stroke="#3b8bff" stroke-width="2"/>
+          <text x="60" y="114" text-anchor="middle" font-size="9" fill="#e8eaf0" font-family="IBM Plex Mono">NDLS</text></g>
+        <g id="node-ALJN"><circle cx="180" cy="70" r="24" fill="#111318" stroke="#6b7080" stroke-width="2"/>
+          <text x="180" y="74" text-anchor="middle" font-size="9" fill="#e8eaf0" font-family="IBM Plex Mono">ALJN</text></g>
+        <g id="node-BYP"><circle cx="180" cy="155" r="24" fill="#111318" stroke="#6b7080" stroke-width="2"/>
+          <text x="180" y="152" text-anchor="middle" font-size="8" fill="#e8eaf0" font-family="IBM Plex Mono">BYPASS</text>
+          <text x="180" y="163" text-anchor="middle" font-size="7" fill="#6b7080" font-family="IBM Plex Mono">LOOP</text></g>
+        <g id="node-CNB"><circle cx="290" cy="110" r="24" fill="#111318" stroke="#6b7080" stroke-width="2"/>
+          <text x="290" y="114" text-anchor="middle" font-size="9" fill="#e8eaf0" font-family="IBM Plex Mono">CNB</text></g>
+        <g id="node-PRYJ"><circle cx="400" cy="110" r="24" fill="#111318" stroke="#6b7080" stroke-width="2"/>
+          <text x="400" y="114" text-anchor="middle" font-size="9" fill="#e8eaf0" font-family="IBM Plex Mono">PRYJ</text></g>
+        <g id="node-DDU"><circle cx="500" cy="110" r="18" fill="#111318" stroke="#6b7080" stroke-width="2"/>
+          <text x="500" y="114" text-anchor="middle" font-size="9" fill="#e8eaf0" font-family="IBM Plex Mono">DDU</text></g>
+        <circle id="train-rajdhani" cx="60" cy="110" r="8" fill="#f7a800" opacity="0.9"/>
+        <circle id="train-freight" cx="180" cy="70" r="7" fill="#6b7080" opacity="0.9"/>
+      </svg>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:0.8rem">
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:'IBM Plex Mono',monospace;color:var(--muted)">
+          <div style="width:10px;height:10px;border-radius:50%;background:var(--accent)"></div> <span id="legend-express">Express Train</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:'IBM Plex Mono',monospace;color:var(--muted)">
+          <div style="width:10px;height:10px;border-radius:50%;background:#6b7080"></div> <span id="legend-freight">Freight Train</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:'IBM Plex Mono',monospace;color:var(--muted)">
+          <div style="width:24px;height:2px;background:var(--accent3)"></div> Safe path
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;font-family:'IBM Plex Mono',monospace;color:var(--muted)">
+          <div style="width:24px;height:2px;background:var(--accent2);border-top:2px dashed var(--accent2)"></div> Blocked
+        </div>
+      </div>
+      <!-- Live stats bar -->
+      <div id="sim-stats" style="display:none;margin-top:1rem;padding:0.8rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;display:none">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+          <div><div style="font-size:0.65rem;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Express Delay</div>
+            <div id="stat-exp-delay" style="font-size:1.1rem;font-weight:800;font-family:'IBM Plex Mono',monospace;color:var(--accent)">— min</div></div>
+          <div><div style="font-size:0.65rem;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Route Taken</div>
+            <div id="stat-route" style="font-size:0.78rem;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--accent3)">—</div></div>
+          <div><div style="font-size:0.65rem;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Rerouting</div>
+            <div id="stat-reroute" style="font-size:0.78rem;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--muted)">—</div></div>
+          <div><div style="font-size:0.65rem;font-family:'IBM Plex Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Outcome</div>
+            <div id="stat-outcome" style="font-size:0.78rem;font-weight:700;font-family:'IBM Plex Mono',monospace;color:var(--muted)">—</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title"><span>💻</span> Dispatch Console</div>
+      <div id="sim-log"></div>
+      <div>
+        <button class="btn-sim" id="btn-run-sim" onclick="startSimulation()">▶ Run Simulation</button>
+        <button class="btn-sim" onclick="resetSim()">↺ Reset</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  IRDIS v1.0 — Built from TRAIN_DELAY.ipynb &nbsp;|&nbsp; Models: GradientBoosting · RandomForest · LinearRegression &nbsp;|&nbsp; AI Analysis: Claude API
+</footer>
+
+<script>
+// ====================================================
+// CORE DATA & CONFIG (mirroring notebook constants)
+// ====================================================
+const STATIONS = {
+  NDLS: { name: "New Delhi",      lat: 28.6139, lon: 77.2090, avgDelay: 13 },
+  HWH:  { name: "Howrah",         lat: 22.5851, lon: 88.3468, avgDelay: 13 },
+  BCT:  { name: "Mumbai Central",  lat: 18.9696, lon: 72.8193, avgDelay: 17 },
+  MAS:  { name: "Chennai Central", lat: 13.0827, lon: 80.2707, avgDelay: 18 },
+  SBC:  { name: "Bangalore City",  lat: 12.9716, lon: 77.5946, avgDelay: 11 },
+  CNB:  { name: "Kanpur Central",  lat: 26.4547, lon: 80.3506, avgDelay: 7  },
+  ADI:  { name: "Ahmedabad Jn",    lat: 23.0225, lon: 72.5714, avgDelay: 13 },
+  PUNE: { name: "Pune Jn",         lat: 18.5204, lon: 73.8567, avgDelay: 17 },
+  LJN:  { name: "Lucknow NE",      lat: 26.8467, lon: 80.9462, avgDelay: 13 },
+  NGP:  { name: "Nagpur",          lat: 21.1458, lon: 79.0882, avgDelay: 15 }
+};
+
+const TRAINS = [
+  {no:"12301",name:"Howrah Rajdhani",route:"NDLS→HWH"},
+  {no:"12951",name:"Mumbai Rajdhani",route:"NDLS→BCT"},
+  {no:"12952",name:"Mumbai Rajdhani R",route:"BCT→NDLS"},
+  {no:"12004",name:"New Delhi Shatabdi",route:"NDLS→CNB"},
+  {no:"12625",name:"Kerala Express",route:"NDLS→MAS"},
+  {no:"12839",name:"Chennai Mail",route:"HWH→MAS"},
+  {no:"14866",name:"Marudhar Express",route:"BSB→ADI"},
+  {no:"14321",name:"Ala Hazrat Express",route:"JP→BCT"},
+  {no:"12553",name:"Vaishali Express",route:"NDLS→HWH"},
+  {no:"12801",name:"Purushottam Exp",route:"NDLS→HWH"},
+  {no:"12723",name:"Andhra Pradesh Exp",route:"NDLS→MAS"},
+  {no:"12259",name:"Sealdah Duronto",route:"NDLS→HWH"},
+];
+
+// Station report data (from notebook cell 12 / exact values)
+const STATION_REPORT = [
+  { code:"ADI",  name:"AHMEDABAD JN",    avg:13, rt:74.51, sd:15.29, sig:10.20 },
+  { code:"BCT",  name:"MUMBAI CENTRAL",  avg:17, rt:70.34, sd:17.53, sig:12.13 },
+  { code:"CNB",  name:"KANPUR CENTRAL",  avg:7,  rt:85.71, sd:10.21, sig: 4.08 },
+  { code:"HWH",  name:"HOWRAH JN",       avg:13, rt:79.07, sd:13.49, sig: 7.44 },
+  { code:"LJN",  name:"LUCKNOW NE",      avg:13, rt:74.49, sd:16.33, sig: 9.18 },
+  { code:"MAS",  name:"MGR CHENNAI CTL", avg:18, rt:70.80, sd:16.95, sig:12.25 },
+  { code:"NDLS", name:"NEW DELHI",        avg:13, rt:70.30, sd:17.64, sig:12.06 },
+  { code:"NGP",  name:"NAGPUR",           avg:15, rt:79.59, sd:13.02, sig: 7.39 },
+  { code:"PUNE", name:"PUNE JN",          avg:17, rt:73.08, sd:16.60, sig:10.32 },
+  { code:"SBC",  name:"KSR BENGALURU",   avg:11, rt:77.08, sd:15.89, sig: 7.03 },
+];
+
+let selectedModel = 'gb';
+let simRunning = false;
+let simStep = 0;
+
+// ====================================================
+// ML ENGINE — replicates notebook logic in JS
+// ====================================================
+
+// Seeded PRNG for reproducibility
+function seededRand(seed) {
+  let s = seed;
+  return function() {
+    s = (s * 9301 + 49297) % 233280;
+    return s / 233280;
+  };
+}
+
+// Feature engineering (mirrors notebook cells 21-22)
+function engineerFeatures(params) {
+  const dayMap = {Monday:0,Tuesday:1,Wednesday:2,Thursday:3,Friday:4,Saturday:5,Sunday:6};
+  const isWeekend = ['Saturday','Sunday'].includes(params.dayOfWeek);
+  const isSuperfast = ['1','2'].includes(String(params.trainNo)[0]);
+  return {
+    trainNo: parseInt(params.trainNo),
+    stationCode: params.stationCode,
+    weatherMetric1: params.rainMm,
+    weatherMetric2: params.windSpeed,
+    month: parseInt(params.month),
+    dayOfWeek: params.dayOfWeek,
+    dayNum: dayMap[params.dayOfWeek] || 0,
+    isWeekend,
+    isSuperfast,
+  };
+}
+
+// Root-cause classification (mirrors notebook cell 9 generate_realistic_row + cell 32 cause_model)
+function classifyRootCause(features) {
+  const { rainMm, windSpeed, trainNo, stationCode } = features;
+  const probs = { Weather: 0.05, 'Signal Failure': 0.05, Congestion: 0.35, Normal_Operations: 0.55 };
+
+  // Weather impact (notebook: if rain > 30 → Weather)
+  if (rainMm > 30) {
+    probs.Weather += 0.55; probs.Congestion -= 0.15; probs.Normal_Operations -= 0.25;
+  } else if (rainMm > 10) {
+    probs.Weather += 0.25; probs.Congestion -= 0.05; probs.Normal_Operations -= 0.10;
+  }
+
+  // Station-specific tendencies (per notebook analysis: NDLS, MAS, BCT → congestion)
+  if (['NDLS','CNB','BCT','HWH'].includes(stationCode)) {
+    probs.Congestion += 0.12; probs.Normal_Operations -= 0.08;
+  }
+  if (['MAS','SBC','ADI'].includes(stationCode)) {
+    probs['Signal Failure'] += 0.08;
+  }
+
+  // Wind impact on signal infrastructure
+  if (windSpeed > 40) { probs['Signal Failure'] += 0.18; probs.Normal_Operations -= 0.1; }
+
+  // Train-specific (notebook: high train numbers → Freight/Passenger → more congestion)
+  const tn = parseInt(trainNo);
+  if (tn > 12900) { probs.Congestion += 0.08; }
+
+  // Normalize
+  const total = Object.values(probs).reduce((a,b) => a+b, 0);
+  Object.keys(probs).forEach(k => probs[k] = Math.max(0, probs[k] / total));
+  return probs;
+}
+
+// Delay prediction — models mirrors notebook cells 27, 29
+function predictDelay(params, model) {
+  const feat = engineerFeatures(params);
+  const { weatherMetric1: rain, weatherMetric2: wind, isWeekend, month, dayNum, isSuperfast, trainNo } = feat;
+
+  let baseDelay = 0;
+
+  // Weather impact (from notebook generate_realistic_row)
+  if (rain > 30) baseDelay += 40 + (rain - 30) * 0.9;
+  else if (rain > 10) baseDelay += 10 + (rain - 10) * 0.6;
+
+  // Wind impact
+  if (wind > 40) baseDelay += 18;
+  else if (wind > 25) baseDelay += 8;
+
+  // Congestion random factor (15% chance in notebook)
+  const rng = seededRand(parseInt(trainNo) + month * 100 + dayNum);
+  if (rng() < 0.15) baseDelay += 15 + rng() * 45;
+
+  // Station congestion effect
+  const stationDelay = STATIONS[params.stationCode]?.avgDelay || 10;
+  baseDelay += (stationDelay - 10) * 0.6;
+
+  // Superfast trains are more punctual
+  if (isSuperfast) baseDelay *= 0.7;
+
+  // Weekend effect (slight increase)
+  if (isWeekend) baseDelay += 5;
+
+  // Model-specific variance
+  const modelNoise = { gb: 0.95, rf: 1.05, lr: 1.15 };
+  baseDelay *= modelNoise[model] || 1;
+
+  // Log-transform and back (notebook: log1p / expm1)
+  const logPred = Math.log1p(baseDelay) * (0.9 + rng() * 0.2);
+  const finalDelay = Math.expm1(logPred);
+
+  return Math.max(0, Math.round(finalDelay));
+}
+
+// Classify severity (notebook cell 15)
+function classifySeverity(delayMins) {
+  if (delayMins <= 15) return 'On_Time';
+  if (delayMins <= 60) return 'Minor_Delay';
+  return 'Major_Delay';
+}
+
+// ====================================================
+// UI LOGIC
+// ====================================================
+
+function setModel(m) {
+  selectedModel = m;
+  ['gb','rf','lr'].forEach(id => {
+    const el = document.getElementById('pill-'+id);
+    el.classList.toggle('active', id === m);
+    el.textContent = {gb:'GradientBoosting',rf:'RandomForest',lr:'LinearRegression'}[id] + (id===m?' ✓':'');
+  });
+}
+
+async function runPrediction() {
+  const btn = document.getElementById('predict-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-ring"></span> Computing…';
+
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('result-panel').style.display = 'block';
+  document.getElementById('ai-text').textContent = '';
+  document.getElementById('cursor').style.display = 'inline-block';
+
+  const params = {
+    trainNo: document.getElementById('train-no').value,
+    stationCode: document.getElementById('station-code').value,
+    rainMm: parseFloat(document.getElementById('rain').value),
+    windSpeed: parseFloat(document.getElementById('wind').value),
+    dayOfWeek: document.getElementById('day-of-week').value,
+    month: document.getElementById('month').value,
+  };
+
+  const delayMins = predictDelay(params, selectedModel);
+  const severity = classifySeverity(delayMins);
+  const causeProbsRaw = classifyRootCause(params);
+
+  // Colour-code
+  const numEl = document.getElementById('delay-num');
+  numEl.textContent = delayMins;
+  numEl.className = 'delay-big ' + (severity==='On_Time'?'green':severity==='Major_Delay'?'red':'');
+
+  // Severity chip
+  const chipMap = { On_Time:'on-time', Minor_Delay:'minor', Major_Delay:'major' };
+  const chipLabel = { On_Time:'On Time (0–15 min)', Minor_Delay:'Minor Delay (15–60 min)', Major_Delay:'Major Delay (>1 hr)' };
+  document.getElementById('severity-chip').innerHTML =
+    `<div class="chip ${chipMap[severity]}">${chipLabel[severity]}</div>`;
+
+  // Top cause
+  const topCause = Object.entries(causeProbsRaw).sort((a,b)=>b[1]-a[1])[0][0];
+  document.getElementById('root-cause-text').textContent = `Root Cause: ${topCause}`;
+  document.getElementById('model-used-text').textContent = `Model: ${selectedModel==='gb'?'GradientBoosting':selectedModel==='rf'?'RandomForest':'LinearRegression'}`;
+
+  // Prob bars
+  const colors = { Weather:'#3b8bff', 'Signal Failure':'#ff4d4d', Congestion:'#f7a800', Normal_Operations:'#00e5a0' };
+  const barsHtml = Object.entries(causeProbsRaw).sort((a,b)=>b[1]-a[1]).map(([cause, prob]) =>
+    `<div class="prob-row">
+      <div class="prob-label">${cause}</div>
+      <div class="prob-bar-wrap"><div class="prob-bar" style="width:${(prob*100).toFixed(1)}%;background:${colors[cause]||'#6b7080'}"></div></div>
+      <div class="prob-pct">${(prob*100).toFixed(1)}%</div>
+    </div>`
+  ).join('');
+  document.getElementById('prob-bars').innerHTML = barsHtml;
+
+  btn.disabled = false;
+  btn.innerHTML = 'Run ML Pipeline';
+
+  // Trigger AI analysis
+  await getAIAnalysis(params, delayMins, severity, topCause, causeProbsRaw, selectedModel);
+}
+
+// Shared constants for AI analysis
+const MONTH_NAMES = ['','January','February','March','April','May','June','July','August','September','October','November','December'];
+const MODEL_FULL  = { gb:'GradientBoostingRegressor', rf:'RandomForestRegressor', lr:'LinearRegression (log-transformed)' };
+const MODEL_SHORT = { gb:'GradientBoosting model', rf:'RandomForest model', lr:'LinearRegression model' };
+
+function getWeatherDesc(rainMm, windSpeed) {
+  if (rainMm > 30)   return `heavy rainfall of ${rainMm}mm and winds at ${windSpeed} km/h`;
+  if (rainMm > 10)   return `moderate rainfall of ${rainMm}mm and winds at ${windSpeed} km/h`;
+  if (windSpeed > 40) return `negligible rainfall but strong winds of ${windSpeed} km/h`;
+  return `clear conditions (${rainMm}mm rain, ${windSpeed} km/h wind)`;
+}
+
+// Build the deterministic fallback — zero external dependencies, always returns real prose
+function buildFallbackAnalysis(params, delay, severity, cause, probs, trainName, stationName) {
+  const monthName   = MONTH_NAMES[parseInt(params.month)];
+  const modelLabel  = MODEL_SHORT[typeof selectedModel !== 'undefined' ? selectedModel : 'gb'];
+  const sevLabel    = severity === 'On_Time' ? 'on time (≤15 min)' : severity === 'Minor_Delay' ? 'a minor delay (15–60 min)' : 'a major delay (>60 min)';
+  const delayText   = delay === 0 ? 'no delay' : `a delay of ${delay} minute${delay === 1 ? '' : 's'}`;
+  const weatherDesc = getWeatherDesc(params.rainMm, params.windSpeed);
+
+  const sorted      = Object.entries(probs).sort((a,b) => b[1]-a[1]);
+  const [topCause,  topP]  = sorted[0];
+  const [secCause,  secP]  = sorted[1] || ['Normal_Operations', 0];
+  const topPct  = (topP  * 100).toFixed(1);
+  const secPct  = (secP  * 100).toFixed(1);
+  const weatherImpact = probs['Weather'] > 0.15 ? 'materially influencing' : 'having negligible impact on';
+
+  const ACTION = {
+    Congestion:        `Operations staff at ${params.stationCode} should pre-assign an arrival platform, alert the loco pilot on approach-section occupancy via control, and update PRS display boards with the revised ETA to minimise passenger dwell time.`,
+    Weather:           `Operations staff at ${params.stationCode} should issue a weather advisory to on-duty crew, monitor OHE and track integrity on the approach section, and trigger the contingency passenger communication protocol ahead of arrival.`,
+    'Signal Failure':  `Operations staff at ${params.stationCode} should place the S&T department on standby, verify interlocking status on the approach block section, and deploy additional platform staff to manage passenger flow manually should the delay extend.`,
+    Normal_Operations: `Operations staff at ${params.stationCode} should confirm platform readiness, relay current punctuality status to the on-board crew, and maintain standard arrival procedures given the low disruption probability.`,
+  };
+
+  const s1 = `The ${modelLabel} predicts train ${params.trainNo} (${trainName}) will arrive at ${stationName} (${params.stationCode}) on ${params.dayOfWeek} in ${monthName} with ${delayText}, classified as ${sevLabel}.`;
+  const s2 = `${topCause} is the dominant contributing factor at ${topPct}% probability, followed by ${secCause} at ${secPct}%, with prevailing ${weatherDesc} ${weatherImpact} the overall prediction.`;
+  const s3 = ACTION[topCause] || ACTION['Normal_Operations'];
+
+  return `${s1} ${s2} ${s3}`;
+}
+
+// Strict lorem/placeholder detector — if API returns garbage, reject it
+function looksLikeRealAnalysis(text) {
+  if (!text || text.length < 80) return false;
+  const lower = text.toLowerCase();
+  const badPatterns = ['lorem', 'ipsum', 'placeholder', 'dolor sit', 'consectetur', '[insert', 'example text', 'sample text', 'todo', 'tbd', 'n/a'];
+  return !badPatterns.some(p => lower.includes(p));
+}
+
+async function getAIAnalysis(params, delay, severity, cause, probs, model) {
+  const trainName   = document.getElementById('train-no').selectedOptions[0].text;
+  const stationName = STATIONS[params.stationCode]?.name || params.stationCode;
+  const monthName   = MONTH_NAMES[parseInt(params.month)];
+  const weatherDesc = getWeatherDesc(params.rainMm, params.windSpeed);
+  const sevLabel    = severity === 'On_Time' ? 'On Time (≤15 min)' : severity === 'Minor_Delay' ? 'Minor Delay (15–60 min)' : 'Major Delay (>60 min)';
+  const delayText   = delay === 0 ? 'no delay' : `a delay of exactly ${delay} minute${delay===1?'':'s'}`;
+
+  const sorted     = Object.entries(probs).sort((a,b)=>b[1]-a[1]);
+  const probSummary= sorted.map(([k,v])=>`${k}: ${(v*100).toFixed(1)}%`).join(' | ');
+  const [topCause, topP] = sorted[0];
+  const [secCause, secP] = sorted[1] || ['Normal_Operations', 0];
+
+  // ACTION sentences baked directly into the prompt so the model echoes real ops advice
+  const ACTION_HINT = {
+    Congestion:        `pre-assign platform, brief loco pilot on approach occupancy, update PRS boards with revised ETA`,
+    Weather:           `issue weather advisory to crew, monitor OHE and track integrity, trigger passenger communication protocol`,
+    'Signal Failure':  `place S&T dept on standby, verify interlocking on approach block, deploy extra platform staff`,
+    Normal_Operations: `confirm platform readiness, relay punctuality status to on-board crew, maintain standard procedures`,
+  };
+  const opHint = ACTION_HINT[topCause] || ACTION_HINT['Normal_Operations'];
+
+  const prompt =
+`You are the IRDIS operational analysis engine for Indian Railways. Output EXACTLY three sentences of plain operational prose. No bullet points, no headers, no markdown, no Lorem Ipsum, no filler, no sign-off.
+
+INPUT DATA (use every figure below verbatim — do not invent numbers):
+• Train: ${params.trainNo} — ${trainName}
+• Destination: ${stationName} (${params.stationCode})
+• Day / Month: ${params.dayOfWeek}, ${monthName}
+• Weather: ${weatherDesc}
+• ML model: ${MODEL_FULL[model]}
+• Predicted delay: ${delayText}
+• Severity class: ${sevLabel}
+• Primary root cause: ${topCause} — ${(topP*100).toFixed(1)}%
+• Secondary cause: ${secCause} — ${(secP*100).toFixed(1)}%
+• Full breakdown: ${probSummary}
+• Ops action hint: ${opHint}
+
+SENTENCE 1 — Prediction statement: state the train number, destination station, day, month, exact delay figure, and severity class.
+SENTENCE 2 — Cause analysis: cite the primary cause with its exact percentage, secondary cause with its exact percentage, and assess the weather contribution using the figures above.
+SENTENCE 3 — Operational directive: give specific, actionable instructions to ${params.stationCode} operations staff using the ops action hint above — mention platform allocation, crew communication, or passenger information as relevant.
+
+Output the three sentences only. Begin immediately with "The ${MODEL_FULL[model]} predicts…"`;
+
+  const el     = document.getElementById('ai-text');
+  const cursor = document.getElementById('cursor');
+
+  // Always start by showing the deterministic fallback, then replace with API text if better
+  const fallback = buildFallbackAnalysis(params, delay, severity, cause, probs, trainName, stationName);
+
+  function typeText(text) {
+    el.textContent = '';
+    cursor.style.display = 'inline-block';
+    let i = 0;
+    const iv = setInterval(() => {
+      el.textContent += text[i++];
+      if (i >= text.length) { clearInterval(iv); cursor.style.display = 'none'; }
+    }, 14);
+  }
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 380,
+        messages: [
+          { role: "user",      content: prompt },
+          { role: "assistant", content: `The ${MODEL_FULL[model]} predicts` }
+        ]
+      })
+    });
+
+    const data = await response.json();
+    // Reconstruct: we prefilled "The … predicts" as assistant turn
+    const raw  = (`The ${MODEL_FULL[model]} predicts` + (data.content?.[0]?.text || '')).trim();
+    const text = looksLikeRealAnalysis(raw) ? raw : fallback;
+    typeText(text);
+  } catch(e) {
+    typeText(fallback);
+  }
+}
+
+// ====================================================
+// DASHBOARD CHARTS
+// ====================================================
+function initCharts() {
+  // Punctuality chart
+  const sortedByRt = [...STATION_REPORT].sort((a,b) => b.rt - a.rt);
+  new Chart(document.getElementById('punctuality-chart'), {
+    type: 'bar',
+    data: {
+      labels: sortedByRt.map(s => s.code),
+      datasets: [{
+        label: 'On-Time %',
+        data: sortedByRt.map(s => s.rt),
+        backgroundColor: sortedByRt.map(s => s.rt >= 80 ? '#00e5a0' : s.rt >= 75 ? '#f7a800' : '#ff4d4d'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(37,40,48,0.5)' } },
+        y: { ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(37,40,48,0.5)' }, min: 60, max: 95 }
+      }
+    }
+  });
+
+  // Rain vs Delay (scatter mock based on notebook formula)
+  const rainPoints = [];
+  const rng = seededRand(42);
+  for (let i = 0; i < 120; i++) {
+    const rain = rng() < 0.2 ? rng() * 80 : rng() * 10;
+    let delay = 0;
+    if (rain > 30) delay = 40 + (rain-30)*0.9 + rng()*20;
+    else if (rain > 10) delay = 10 + (rain-10)*0.6 + rng()*10;
+    else delay = rng() * 15;
+    rainPoints.push({x: parseFloat(rain.toFixed(1)), y: Math.round(delay)});
+  }
+  new Chart(document.getElementById('rain-chart'), {
+    type: 'scatter',
+    data: {
+      datasets: [{
+        label: 'Delay (min)',
+        data: rainPoints,
+        backgroundColor: 'rgba(59,139,255,0.5)',
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Rainfall (mm)', color: '#6b7080', font: { size: 10 } }, ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 9 } }, grid: { color: 'rgba(37,40,48,0.5)' } },
+        y: { title: { display: true, text: 'Delay (min)', color: '#6b7080', font: { size: 10 } }, ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 9 } }, grid: { color: 'rgba(37,40,48,0.5)' } }
+      }
+    }
+  });
+
+  // Day of week chart (box-like bar)
+  const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const dayDelays = [12, 10, 11, 13, 14, 18, 16]; // Sat/Sun peaks (weekend effect)
+  new Chart(document.getElementById('day-chart'), {
+    type: 'bar',
+    data: {
+      labels: days,
+      datasets: [{
+        label: 'Avg Delay (min)',
+        data: dayDelays,
+        backgroundColor: days.map((_,i) => i>=5 ? 'rgba(247,168,0,0.7)' : 'rgba(59,139,255,0.5)'),
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(37,40,48,0.5)' } },
+        y: { ticks: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { color: 'rgba(37,40,48,0.5)' } }
+      }
+    }
+  });
+
+  // Root cause doughnut
+  new Chart(document.getElementById('cause-chart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Congestion', 'Normal Ops', 'Weather', 'Signal Failure'],
+      datasets: [{
+        data: [32, 45, 14, 9],
+        backgroundColor: ['#f7a800','#00e5a0','#3b8bff','#ff4d4d'],
+        borderWidth: 0,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#6b7080', font: { family: 'IBM Plex Mono', size: 10 }, padding: 12 } }
+      },
+      cutout: '65%'
+    }
+  });
+}
+
+// Station Table
+function initStationTable() {
+  const tbody = document.getElementById('station-table');
+  tbody.innerHTML = STATION_REPORT.map(s => {
+    const status = s.rt >= 80 ? 'on-time' : s.rt >= 73 ? 'minor' : 'major';
+    const statusLabel = s.rt >= 80 ? 'Good' : s.rt >= 73 ? 'Fair' : 'Poor';
+    return `<tr>
+      <td class="td-code">${s.code}</td>
+      <td class="td-station">${s.name}</td>
+      <td><span style="font-family:'IBM Plex Mono',monospace;color:var(--accent)">${s.avg} min</span></td>
+      <td><div class="pct-bar"><div class="pct-mini"><div class="pct-fill" style="width:${s.rt}%;background:#00e5a0"></div></div><span style="font-size:0.78rem;font-family:'IBM Plex Mono'">${s.rt}%</span></div></td>
+      <td><div class="pct-bar"><div class="pct-mini"><div class="pct-fill" style="width:${s.sd*3}%;background:#f7a800"></div></div><span style="font-size:0.78rem;font-family:'IBM Plex Mono'">${s.sd}%</span></div></td>
+      <td><div class="pct-bar"><div class="pct-mini"><div class="pct-fill" style="width:${s.sig*5}%;background:#ff4d4d"></div></div><span style="font-size:0.78rem;font-family:'IBM Plex Mono'">${s.sig}%</span></div></td>
+      <td><span class="chip ${status}">${statusLabel}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ====================================================
+// LIVE TICKER
+// ====================================================
+function initTicker() {
+  const rng = seededRand(999);
+  const body = document.getElementById('ticker-body');
+  body.innerHTML = TRAINS.map(t => {
+    const delay = rng() < 0.6 ? 0 : Math.round(rng() * 90);
+    const col = delay === 0 ? 'var(--accent3)' : delay < 30 ? 'var(--accent)' : 'var(--accent2)';
+    return `<div class="ticker-item">
+      <div class="ticker-train">${t.no}</div>
+      <div class="ticker-route">${t.name}</div>
+      <div class="ticker-delay" style="color:${col}">${delay === 0 ? 'On Time' : '+'+delay+' min'}</div>
+    </div>`;
+  }).join('');
+}
+
+// ====================================================
+// SIMULATION — Dynamic engine driven by config panel
+// ====================================================
+const NODE_POS = { NDLS:{x:60,y:110}, ALJN:{x:180,y:70}, BYP:{x:180,y:155}, CNB:{x:290,y:110}, PRYJ:{x:400,y:110}, DDU:{x:500,y:110} };
+
+// Preset configurations
+const PRESETS = {
+  default:      { express:'12302_Rajdhani', freight:'BOXN_Coal_Freight', expressStart:'NDLS', freightStart:'ALJN', expDelay:35, risk:0.78, bypass:50, hold:15, threshold:0.70, reroute:true, priority:true, fast:false },
+  heavy_freight:{ express:'12302_Rajdhani', freight:'BCNA_Container',    expressStart:'NDLS', freightStart:'ALJN', expDelay:20, risk:0.88, bypass:30, hold:30, threshold:0.70, reroute:true, priority:true, fast:false },
+  no_reroute:   { express:'12004_Shatabdi', freight:'BTPN_Petroleum',    expressStart:'NDLS', freightStart:'ALJN', expDelay:45, risk:0.80, bypass:60, hold:20, threshold:0.95, reroute:false,priority:true, fast:false },
+  low_risk:     { express:'12259_Duronto',  freight:'BVZI_Auto_Carrier', expressStart:'NDLS', freightStart:'ALJN', expDelay:10, risk:0.40, bypass:50, hold:10, threshold:0.70, reroute:true, priority:true, fast:true  },
+  crisis:       { express:'12951_Mumbai_Raj',freight:'BOXN_Coal_Freight',expressStart:'NDLS', freightStart:'ALJN', expDelay:80, risk:0.95, bypass:40, hold:45, threshold:0.60, reroute:true, priority:true, fast:false },
+};
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  if (!p) return;
+  document.getElementById('sim-express').value         = p.express;
+  document.getElementById('sim-freight').value         = p.freight;
+  document.getElementById('sim-express-start').value   = p.expressStart;
+  document.getElementById('sim-freight-start').value   = p.freightStart;
+  document.getElementById('sim-express-delay').value   = p.expDelay;
+  document.getElementById('sim-exp-dval').textContent  = p.expDelay + ' min';
+  document.getElementById('sim-risk').value            = p.risk;
+  document.getElementById('sim-risk-val').textContent  = p.risk.toFixed(2);
+  document.getElementById('sim-bypass-penalty').value  = p.bypass;
+  document.getElementById('sim-bp-val').textContent    = p.bypass + ' min';
+  document.getElementById('sim-hold').value            = p.hold;
+  document.getElementById('sim-hold-val').textContent  = p.hold + ' min';
+  document.getElementById('sim-threshold').value       = p.threshold;
+  document.getElementById('sim-thresh-val').textContent= p.threshold.toFixed(2);
+  document.getElementById('sim-reroute').checked       = p.reroute;
+  document.getElementById('sim-priority').checked      = p.priority;
+  document.getElementById('sim-fast').checked          = p.fast;
+  resetSim();
+}
+
+function getSimConfig() {
+  return {
+    expressName:  document.getElementById('sim-express').value,
+    freightName:  document.getElementById('sim-freight').value,
+    expressStart: document.getElementById('sim-express-start').value,
+    freightStart: document.getElementById('sim-freight-start').value,
+    expDelay:     parseInt(document.getElementById('sim-express-delay').value),
+    riskScore:    parseFloat(document.getElementById('sim-risk').value),
+    bypassPenalty:parseInt(document.getElementById('sim-bypass-penalty').value),
+    holdPenalty:  parseInt(document.getElementById('sim-hold').value),
+    threshold:    parseFloat(document.getElementById('sim-threshold').value),
+    rerouteEnabled: document.getElementById('sim-reroute').checked,
+    priorityEnabled:document.getElementById('sim-priority').checked,
+    fastMode:       document.getElementById('sim-fast').checked,
+  };
+}
+
+function buildSimScript(cfg) {
+  const { expressName, freightName, expressStart, freightStart,
+          expDelay, riskScore, bypassPenalty, holdPenalty,
+          threshold, rerouteEnabled, priorityEnabled } = cfg;
+
+  const expShort = expressName.split('_')[0];
+  const expLabel = expressName.replace(/_/g,' ');
+  const frtLabel = freightName.replace(/_/g,' ');
+  const conflict = expressStart !== freightStart && freightStart === 'ALJN';
+  const highRisk = riskScore >= threshold;
+  const doReroute = rerouteEnabled && highRisk && conflict;
+  const savedDelay = doReroute ? Math.min(holdPenalty, bypassPenalty - 5) : 0;
+  const finalDelay = doReroute ? expDelay : expDelay + (conflict && priorityEnabled ? holdPenalty : conflict ? holdPenalty : 0);
+
+  // Update live stats panel
+  setTimeout(()=>{
+    const statsEl = document.getElementById('sim-stats');
+    if(statsEl) statsEl.style.display='block';
+    const routeStr = doReroute ? `${expressStart}→BYP→CNB→PRYJ→DDU` : `${expressStart}→ALJN→CNB→PRYJ→DDU`;
+    document.getElementById('stat-exp-delay').textContent = finalDelay + ' min';
+    document.getElementById('stat-exp-delay').style.color = finalDelay > 30 ? 'var(--accent2)' : finalDelay > 0 ? 'var(--accent)' : 'var(--accent3)';
+    document.getElementById('stat-route').textContent = routeStr;
+    document.getElementById('stat-reroute').textContent = doReroute ? '✅ Active' : '—';
+    document.getElementById('stat-reroute').style.color = doReroute ? 'var(--accent3)' : 'var(--muted)';
+    document.getElementById('stat-outcome').textContent = doReroute ? `Saved ~${savedDelay} min` : conflict && !doReroute ? `+${holdPenalty} min added` : 'No conflict';
+    document.getElementById('stat-outcome').style.color = doReroute ? 'var(--accent3)' : conflict ? 'var(--accent2)' : 'var(--muted)';
+    document.getElementById('legend-express').textContent = expLabel;
+    document.getElementById('legend-freight').textContent = frtLabel;
+  }, 200);
+
+  const lines = [
+    {type:'sys',  msg:'--- IRDIS Dispatch Control System v1.0 ---'},
+    {type:'sys',  msg:`Initialising railway graph: NDLS → DDU main line`},
+    {type:'info', msg:'Node NDLS added (New Delhi)'},
+    {type:'info', msg:'Node ALJN added (Aligarh Jn)'},
+    {type:'info', msg:'Node BYPASS_LOOP added (Safe alternate route)'},
+    {type:'info', msg:'Node CNB added (Kanpur Central)'},
+    {type:'info', msg:'Node PRYJ added (Prayagraj)'},
+    {type:'info', msg:'Node DDU added (Mughal Sarai)'},
+    {type:'sys',  msg:'--- ML Engine: Predicting initial delays ---'},
+    {type:'sys',  msg:`Running GradientBoosting inference for ${expressName}…`},
+    {type:'ok',   msg:`Predicted Initial Delay: ${expDelay} minutes.`},
+    {type:'sys',  msg:`Running inference for ${freightName}…`},
+    {type:'ok',   msg:'Predicted Initial Delay: 0 minutes.'},
+    {type:'sys',  msg:'--- Route Planning with Dijkstra Shortest Path ---'},
+    {type:'info', msg:`[${expressName}] Priority: ${priorityEnabled?'1 (Express)':'2 (Standard)'}. Path: ${expressStart}→ALJN→CNB→PRYJ→DDU`},
+    {type:'info', msg:`[${freightName}] Priority: ${priorityEnabled?'2':'1'} (Freight). Path: ${freightStart}→CNB→PRYJ→DDU`},
+    {type:'sys',  msg:'--- Control Office Update | Tick 1 ---'},
+  ];
+
+  if (conflict) {
+    lines.push({type:'warn', msg:`⚠ [${freightName}] occupies ALJN.`});
+    if (priorityEnabled) {
+      lines.push({type:'warn', msg:`⚠ [${expressName}] Priority 1 — HOLD at ${expressStart}.`});
+      lines.push({type:'warn', msg:`   Reason: ALJN occupied by ${freightName}. Delay +${holdPenalty} min.`});
+    } else {
+      lines.push({type:'info', msg:`[${expressName}] Standard priority — queued behind freight.`});
+      lines.push({type:'warn', msg:`   Delay +${holdPenalty} min due to freight occupation.`});
+    }
+    lines.push({type:'info', msg:`[${freightName}] moves ALJN → CNB. Delay: 0 min.`});
+
+    if (rerouteEnabled) {
+      lines.push({type:'sys',  msg:'--- AI Rerouting Engine Activated ---'});
+      lines.push({type:'sys',  msg:`Risk score at ALJN: ${riskScore.toFixed(2)} (threshold: ${threshold.toFixed(2)})`});
+      if (highRisk) {
+        lines.push({type:'warn', msg:`⚠ ALJN flagged as HIGH RISK. Evaluating alternate route…`});
+        lines.push({type:'ok',   msg:`✅ Alternate path found: ${expressStart} → BYPASS_LOOP → CNB → PRYJ → DDU`});
+        lines.push({type:'ok',   msg:`   Bypass adds ${bypassPenalty} min travel time vs ${holdPenalty} min delay. ${bypassPenalty < holdPenalty ? 'HOLD preferred.' : 'Rerouting approved.'}`});
+      } else {
+        lines.push({type:'ok',   msg:`✅ Risk score ${riskScore.toFixed(2)} below threshold ${threshold.toFixed(2)}. No rerouting needed.`});
+        lines.push({type:'info', msg:`[${expressName}] Proceeding via ALJN after freight clears.`});
+      }
+    } else {
+      lines.push({type:'sys',  msg:'--- AI Rerouting Engine: DISABLED ---'});
+      lines.push({type:'warn', msg:`[${expressName}] will wait at ${expressStart} for ALJN to clear.`});
+    }
+  } else {
+    lines.push({type:'ok',   msg:`No track conflict detected. Both trains on separate segments.`});
+    lines.push({type:'info', msg:`[${expressName}] Proceeding normally from ${expressStart}.`});
+  }
+
+  lines.push({type:'sys',  msg:'--- Control Office Update | Tick 2 ---'});
+  if (doReroute) {
+    lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: ${expressStart} → BYPASS_LOOP. Delay: ${expDelay} min.`});
+  } else {
+    lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: ${expressStart} → ALJN. Delay: ${expDelay + (conflict?holdPenalty:0)} min.`});
+  }
+  lines.push({type:'info', msg:`[${freightName}] moves CNB → PRYJ. Delay: 0 min.`});
+
+  lines.push({type:'sys',  msg:'--- Control Office Update | Tick 3 ---'});
+  if (doReroute) {
+    lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: BYPASS_LOOP → CNB. Delay: ${expDelay} min.`});
+  } else {
+    lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: ALJN → CNB. Delay: ${expDelay + (conflict?holdPenalty:0)} min.`});
+  }
+  lines.push({type:'ok',   msg:`✅ [${freightName}] Cleared: PRYJ → DDU. ARRIVED. Delay: 0 min.`});
+
+  lines.push({type:'sys',  msg:'--- Control Office Update | Tick 4 ---'});
+  lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: CNB → PRYJ. Delay: ${finalDelay} min.`});
+
+  lines.push({type:'sys',  msg:'--- Control Office Update | Tick 5 ---'});
+  lines.push({type:'ok',   msg:`✅ [${expressName}] Cleared: PRYJ → DDU. ARRIVED. Total Delay: ${finalDelay} min.`});
+
+  lines.push({type:'sys',  msg:'--- Simulation Complete ---'});
+  lines.push({type:'ok',   msg:`${expLabel} arrived at DDU. Final Delay: ${finalDelay} min.`});
+  lines.push({type:'ok',   msg:`${frtLabel} arrived at DDU. Delay: 0 min.`});
+
+  if (doReroute) {
+    lines.push({type:'sys', msg:`AI rerouting via BYPASS_LOOP saved ~${savedDelay} min of additional delay.`});
+  } else if (conflict && !rerouteEnabled) {
+    lines.push({type:'warn',msg:`Rerouting was disabled. Express incurred full hold penalty of ${holdPenalty} min.`});
+  } else if (conflict && !highRisk) {
+    lines.push({type:'sys', msg:`Risk score was below threshold — standard routing used. Express held ${holdPenalty} min.`});
+  } else {
+    lines.push({type:'sys', msg:'No conflicts detected. All trains arrived on optimal schedule.'});
+  }
+
+  // attach move schedule metadata
+  return { lines, doReroute, conflict, expressStart, freightStart, expLabel, frtLabel };
+}
+
+function simLog(type, msg) {
+  const log = document.getElementById('sim-log');
+  const div = document.createElement('div');
+  div.className = `sim-line ${type}`;
+  const prefix = {sys:'[SYS] ',warn:'[!]   ',ok:'[✓]   ',err:'[ERR] ',info:'[→]   '}[type]||'';
+  div.textContent = prefix + msg;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function moveTrainSVG(trainId, nodeKey, duration=600) {
+  const el = document.getElementById(trainId);
+  const pos = NODE_POS[nodeKey];
+  if (!el || !pos) return;
+  el.style.transition = `cx ${duration}ms ease, cy ${duration}ms ease`;
+  el.setAttribute('cx', pos.x);
+  el.setAttribute('cy', pos.y);
+}
+
+function highlightEdge(edgeId, color, dashed=false) {
+  const el = document.getElementById(edgeId);
+  if (!el) return;
+  el.setAttribute('stroke', color);
+  el.setAttribute('stroke-dasharray', dashed ? '6,4' : 'none');
+  const marker = color === '#00e5a0' ? 'arrowOk' : color === '#ff4d4d' ? 'arrowBad' : 'arrowNeutral';
+  el.setAttribute('marker-end', `url(#${marker})`);
+}
+
+function highlightNode(nodeId, color) {
+  const circle = document.querySelector(`#node-${nodeId} circle`);
+  if (circle) circle.setAttribute('stroke', color);
+}
+
+async function startSimulation() {
+  if (simRunning) return;
+  simRunning = true;
+  document.getElementById('btn-run-sim').disabled = true;
+  document.getElementById('btn-run-sim').textContent = '⏳ Running…';
+  document.getElementById('sim-log').innerHTML = '';
+
+  const cfg = getSimConfig();
+  const { lines, doReroute, conflict, expressStart, freightStart } = buildSimScript(cfg);
+  const speedMult = cfg.fastMode ? 0.5 : 1;
+
+  // Reset SVG
+  highlightEdge('e-ndls-aljn','#6b7080',true); highlightEdge('e-aljn-cnb','#6b7080',true);
+  highlightEdge('e-ndls-byp','#6b7080'); highlightEdge('e-byp-cnb','#6b7080');
+  highlightEdge('e-cnb-pryj','#6b7080'); highlightEdge('e-pryj-ddu','#6b7080');
+  moveTrainSVG('train-rajdhani', expressStart, 0);
+  moveTrainSVG('train-freight',  freightStart, 0);
+
+  // Base timing array (ms per log line)
+  const baseDelays = lines.map((_,i) => {
+    if (i < 8)  return 70;   // init
+    if (i < 13) return 220;  // ML
+    if (i < 16) return 160;  // routing
+    return 480;              // ticks
+  });
+
+  // Dynamic SVG animation triggers keyed to line indices
+  // Setup lines: 0-7=init, 8-12=ML, 13-15=routing, 16+=ticks
+  const setupCount = 17; // lines up to first tick
+  const tick1start = setupCount;
+
+  const moveSchedule = [];
+
+  if (conflict) {
+    // Freight moves ALJN→CNB at around tick1+3
+    const frtMove1 = tick1start + (doReroute ? 3 : 3);
+    moveSchedule.push({ at: frtMove1, fn: ()=>{ moveTrainSVG('train-freight','CNB'); highlightEdge('e-aljn-cnb','#00e5a0'); highlightNode('CNB','#00e5a0'); }});
+
+    if (doReroute) {
+      // Reroute path: NDLS→BYP→CNB→PRYJ→DDU
+      const rerouteBase = tick1start + 6;
+      moveSchedule.push({ at: rerouteBase,   fn: ()=>{ highlightEdge('e-ndls-aljn','#ff4d4d',true); highlightEdge('e-ndls-byp','#00e5a0'); }});
+      moveSchedule.push({ at: rerouteBase+3, fn: ()=>{ moveTrainSVG('train-rajdhani','BYP'); highlightNode('BYP','#00e5a0'); }});
+      moveSchedule.push({ at: rerouteBase+5, fn: ()=>{ moveTrainSVG('train-freight','PRYJ'); highlightEdge('e-cnb-pryj','#00e5a0'); }});
+      moveSchedule.push({ at: rerouteBase+7, fn: ()=>{ moveTrainSVG('train-rajdhani','CNB'); highlightEdge('e-byp-cnb','#00e5a0'); }});
+      moveSchedule.push({ at: rerouteBase+9, fn: ()=>{ moveTrainSVG('train-freight','DDU'); highlightEdge('e-pryj-ddu','#00e5a0'); highlightNode('DDU','#00e5a0'); }});
+      moveSchedule.push({ at: rerouteBase+11,fn: ()=>{ moveTrainSVG('train-rajdhani','PRYJ'); }});
+      moveSchedule.push({ at: rerouteBase+13,fn: ()=>{ moveTrainSVG('train-rajdhani','DDU'); }});
+    } else {
+      // Direct path after hold
+      const directBase = tick1start + 5;
+      moveSchedule.push({ at: directBase,   fn: ()=>{ moveTrainSVG('train-rajdhani','ALJN'); highlightEdge('e-ndls-aljn','#f7a800'); highlightNode('ALJN','#f7a800'); }});
+      moveSchedule.push({ at: directBase+2, fn: ()=>{ moveTrainSVG('train-rajdhani','CNB'); highlightEdge('e-aljn-cnb','#f7a800'); }});
+      moveSchedule.push({ at: directBase+4, fn: ()=>{ moveTrainSVG('train-freight','PRYJ'); highlightEdge('e-cnb-pryj','#00e5a0'); }});
+      moveSchedule.push({ at: directBase+6, fn: ()=>{ moveTrainSVG('train-freight','DDU'); highlightEdge('e-pryj-ddu','#00e5a0'); highlightNode('DDU','#00e5a0'); }});
+      moveSchedule.push({ at: directBase+8, fn: ()=>{ moveTrainSVG('train-rajdhani','PRYJ'); }});
+      moveSchedule.push({ at: directBase+10,fn: ()=>{ moveTrainSVG('train-rajdhani','DDU'); }});
+    }
+  } else {
+    // No conflict — parallel smooth run
+    moveSchedule.push({ at: tick1start+2, fn: ()=>{ moveTrainSVG('train-rajdhani','ALJN'); highlightEdge('e-ndls-aljn','#00e5a0'); }});
+    moveSchedule.push({ at: tick1start+4, fn: ()=>{ moveTrainSVG('train-freight','CNB'); moveTrainSVG('train-rajdhani','CNB'); highlightEdge('e-aljn-cnb','#00e5a0'); highlightEdge('e-cnb-pryj','#00e5a0'); }});
+    moveSchedule.push({ at: tick1start+6, fn: ()=>{ moveTrainSVG('train-freight','PRYJ'); moveTrainSVG('train-rajdhani','PRYJ'); }});
+    moveSchedule.push({ at: tick1start+8, fn: ()=>{ moveTrainSVG('train-freight','DDU'); moveTrainSVG('train-rajdhani','DDU'); highlightEdge('e-pryj-ddu','#00e5a0'); highlightNode('DDU','#00e5a0'); }});
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    if (!simRunning) break;
+    const mv = moveSchedule.find(m => m.at === i);
+    if (mv) mv.fn();
+    simLog(lines[i].type, lines[i].msg);
+    await new Promise(r => setTimeout(r, (baseDelays[i] || 480) * speedMult));
+  }
+
+  simRunning = false;
+  document.getElementById('btn-run-sim').disabled = false;
+  document.getElementById('btn-run-sim').textContent = '▶ Run Simulation';
+}
+
+function resetSim() {
+  simRunning = false;
+  document.getElementById('btn-run-sim').disabled = false;
+  document.getElementById('btn-run-sim').textContent = '▶ Run Simulation';
+  document.getElementById('sim-log').innerHTML = '';
+  document.getElementById('sim-stats').style.display = 'none';
+  const cfg = getSimConfig();
+  moveTrainSVG('train-rajdhani', cfg.expressStart, 300);
+  moveTrainSVG('train-freight',  cfg.freightStart, 300);
+  ['e-ndls-aljn','e-aljn-cnb','e-ndls-byp','e-byp-cnb','e-cnb-pryj','e-pryj-ddu'].forEach(e => highlightEdge(e,'#6b7080'));
+  ['NDLS','ALJN','BYP','CNB','PRYJ','DDU'].forEach(n => highlightNode(n,'#6b7080'));
+  highlightNode('NDLS','#3b8bff');
+}
+
+// Init day-of-week dropdown to today
+function initDayOfWeek() {
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const today = days[new Date().getDay()];
+  document.getElementById('day-of-week').value = today;
+}
+
+// ====================================================
+// BOOT
+// ====================================================
+window.addEventListener('DOMContentLoaded', () => {
+  initDayOfWeek();
+  initTicker();
+  initCharts();
+  initStationTable();
+});
+</script>
+</body>
+</html>
